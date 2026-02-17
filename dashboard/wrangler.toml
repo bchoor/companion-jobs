@@ -7,5 +7,5 @@ directory = "./dist"
 not_found_handling = "single-page-application"
 
 [[routes]]
-pattern = "companion-dashboard.bchoor.com/*"
+pattern = "jobs-dashboard.bchoor.com/*"
 zone_id = "b10504faad00f03133ab37053799fe3f"
