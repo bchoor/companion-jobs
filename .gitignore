@@ -1,0 +1,25 @@
+# Environment
+.env
+.env.local
+
+# Logs
+logs/
+runner.log
+
+# Build outputs
+dist/
+node_modules/
+.wrangler/
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Scrapers
+scrapers/*/output/
+store/
+
+# OS
+.DS_Store

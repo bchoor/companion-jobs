@@ -1,0 +1,19 @@
+{
+  "name": "scraper-jobs",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "scrape:festool": "bun run scrapers/festoolrecon/scraper.ts"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.15.0",
+    "dotenv": "^17.3.1",
+    "playwright": "^1.50.0"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-s3": "^3.991.0",
+    "bun-types": "^1.3.9",
+    "sharp": "^0.34.5"
+  }
+}

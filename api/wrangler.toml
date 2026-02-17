@@ -1,0 +1,25 @@
+name = "companion-jobs"
+main = "src/index.ts"
+compatibility_date = "2024-12-16"
+compatibility_flags = ["nodejs_compat"]
+
+[env.production]
+vars = { ENVIRONMENT = "production" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "companion-jobs"
+database_id = "2a789be5-eba3-4584-b59f-d8b0b99b4c4f"
+
+[[r2_buckets]]
+binding = "STORE"
+bucket_name = "companion-store"
+
+[env.production.d1_databases]
+binding = "DB"
+database_name = "companion-jobs"
+database_id = "2a789be5-eba3-4584-b59f-d8b0b99b4c4f"
+
+[env.production.r2_buckets]
+binding = "STORE"
+bucket_name = "companion-store"
