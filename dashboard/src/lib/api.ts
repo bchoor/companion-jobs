@@ -7,13 +7,10 @@ export const api = axios.create({
   },
 });
 
-// Add auth interceptor for Stack Auth tokens
-api.interceptors.request.use(
-  async (config) => {
-    // Token will be added by Stack Auth SDK when needed
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+// Extract nested data from API responses: { success, data } → data
+api.interceptors.response.use((response) => {
+  if (response.data?.success !== undefined && response.data?.data !== undefined) {
+    response.data = response.data.data;
   }
-);
+  return response;
+});

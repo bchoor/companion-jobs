@@ -1,6 +1,6 @@
 import { Outlet, createRootRoute } from '@tanstack/react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StackProvider, StackClientApp } from '@stackframe/stack';
+import { ThemeProvider } from '@/components/theme-provider';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -11,22 +11,16 @@ const queryClient = new QueryClient({
   },
 });
 
-const stackApp = new StackClientApp({
-  tokenStore: 'nextjs-cookie',
-  projectId: import.meta.env.VITE_STACK_PROJECT_ID,
-  publishableClientKey: import.meta.env.VITE_STACK_PUBLISHABLE_CLIENT_KEY,
-});
-
 export const Route = createRootRoute({
   component: RootLayout,
 });
 
 function RootLayout() {
   return (
-    <StackProvider app={stackApp}>
+    <ThemeProvider defaultTheme="system" storageKey="companion-jobs-theme">
       <QueryClientProvider client={queryClient}>
         <Outlet />
       </QueryClientProvider>
-    </StackProvider>
+    </ThemeProvider>
   );
 }

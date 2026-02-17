@@ -12,7 +12,13 @@ const app = new Hono<{ Bindings: Env }>();
 
 // CORS middleware
 app.use('/*', cors({
-  origin: ['http://localhost:3000', 'https://*.pages.dev'],
+  origin: (origin) => {
+    if (!origin) return 'http://localhost:3000';
+    if (origin === 'http://localhost:3000') return origin;
+    if (origin.endsWith('.pages.dev')) return origin;
+    if (origin.endsWith('.bchoor.com')) return origin;
+    return '';
+  },
   credentials: true,
 }));
 
