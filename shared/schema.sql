@@ -5,6 +5,7 @@ CREATE TABLE jobs (
   url TEXT,
   frequency_hours INTEGER NOT NULL,
   enabled INTEGER NOT NULL DEFAULT 1,
+  config TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
