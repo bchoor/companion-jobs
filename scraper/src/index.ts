@@ -241,6 +241,91 @@ export default {
         return new Response(`Scrape failed: ${error}`, { status: 500, headers: CORS_HEADERS });
       }
     }
+
+    if (url.pathname === '/test-email') {
+      try {
+        // 1. Get the festoolrecon job
+        const job = await env.DB.prepare(
+          `SELECT id FROM jobs WHERE name = 'festoolrecon'`
+        ).first<{ id: number }>();
+
+        if (!job) {
+          return new Response('Job not found', { status: 404, headers: CORS_HEADERS });
+        }
+
+        // 2. Get the latest 2 successful runs + their result data
+        const runs = await env.DB.prepare(
+          `SELECT runs.screenshot_file, results.data
+           FROM runs JOIN results ON results.run_id = runs.id
+           WHERE runs.job_id = ? AND runs.status = 'success'
+           ORDER BY runs.started_at DESC LIMIT 2`
+        ).bind(job.id).all<{ screenshot_file: string; data: string }>();
+
+        if (!runs.results || runs.results.length < 1) {
+          return new Response('No successful runs found', { status: 404, headers: CORS_HEADERS });
+        }
+
+        // 3. Parse current and previous result data
+        const currentData = JSON.parse(runs.results[0].data);
+        const currentProductName = currentData?.products?.[0]?.productName;
+        const currentPricing = {
+          msrp: currentData?.products?.[0]?.msrp,
+          discounted: currentData?.products?.[0]?.discountedPrice,
+        };
+
+        let oldProductName: string | null = null;
+        let oldPricing: { msrp?: string; discounted?: string } | null = null;
+
+        if (runs.results.length > 1) {
+          const previousData = JSON.parse(runs.results[1].data);
+          oldProductName = previousData?.products?.[0]?.productName || null;
+          oldPricing = previousData?.products?.[0]
+            ? { msrp: previousData.products[0].msrp, discounted: previousData.products[0].discountedPrice }
+            : null;
+        }
+
+        // 4. Fetch screenshot from R2
+        const hash = runs.results[0].screenshot_file;
+        const key = `${hash.slice(0, 2)}/${hash}`;
+        const r2Object = await env.STORE.get(key);
+
+        if (!r2Object) {
+          return new Response('Screenshot not found in R2', { status: 404, headers: CORS_HEADERS });
+        }
+
+        // 5. Convert R2 object to base64
+        const arrayBuffer = await r2Object.arrayBuffer();
+        const bytes = new Uint8Array(arrayBuffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        // 6. Send notification
+        const emailResult = await sendChangeNotification({
+          oldProductName,
+          newProductName: currentProductName,
+          oldPricing,
+          pricing: currentPricing,
+          screenshotBase64: base64,
+          resendApiKey: env.RESEND_API_KEY,
+          emailFrom: env.EMAIL_FROM,
+          emailTo: env.EMAIL_TO,
+        });
+
+        // 7. Return result
+        if (emailResult.success) {
+          return new Response('Test email sent successfully', { status: 200, headers: CORS_HEADERS });
+        } else {
+          return new Response(`Email failed: ${emailResult.error}`, { status: 500, headers: CORS_HEADERS });
+        }
+      } catch (error) {
+        console.error('[test-email] Failed:', error);
+        return new Response(`Test email failed: ${error}`, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
     return new Response('companion-scraper is running', { status: 200, headers: CORS_HEADERS });
   },
 } satisfies ExportedHandler<Env>;

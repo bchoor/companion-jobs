@@ -1,6 +1,6 @@
 import { format, formatDistanceToNow } from 'date-fns'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { PlayIcon, Loader2Icon } from 'lucide-react'
+import { PlayIcon, Loader2Icon, MailIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Card,
@@ -100,6 +100,21 @@ export function JobDetail({ jobId }: JobDetailProps) {
     },
     onError: (error) => {
       toast.error(`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    },
+  })
+
+  const testAlertMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch(`${scraperUrl}/test-email`)
+      const text = await response.text()
+      if (!response.ok) throw new Error(text)
+      return text
+    },
+    onSuccess: (message) => {
+      toast.success(`Test alert sent: ${message}`)
+    },
+    onError: (error) => {
+      toast.error(`Test alert failed: ${error.message}`)
     },
   })
 
@@ -233,6 +248,19 @@ export function JobDetail({ jobId }: JobDetailProps) {
                         disabled={alertingMutation.isPending}
                       />
                       <Label className='text-sm'>{job.config?.alerting_enabled ? 'On' : 'Off'}</Label>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        onClick={() => testAlertMutation.mutate()}
+                        disabled={testAlertMutation.isPending}
+                      >
+                        {testAlertMutation.isPending ? (
+                          <Loader2Icon className='size-4 animate-spin' />
+                        ) : (
+                          <MailIcon className='size-4' />
+                        )}
+                        Test
+                      </Button>
                     </div>
                   </div>
                 </div>
