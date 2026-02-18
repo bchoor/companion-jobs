@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { AxiosError } from 'axios';
 import { api } from '@/lib/api';
 import type { Job } from '@/lib/types';
 
@@ -10,5 +11,9 @@ export function useJob(jobId: number) {
       return data;
     },
     enabled: !!jobId,
+    retry: (failureCount, error) => {
+      if (error instanceof AxiosError && error.response?.status === 404) return false;
+      return failureCount < 3;
+    },
   });
 }
