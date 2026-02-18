@@ -23,3 +23,7 @@ bucket_name = "companion-store"
 [[routes]]
 pattern = "jobs-scraper.bchoor.com/*"
 zone_id = "b10504faad00f03133ab37053799fe3f"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
