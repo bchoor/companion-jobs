@@ -9,15 +9,22 @@ app.get('/', async (c) => {
   try {
     const type = c.req.query('type');
 
-    let query = 'SELECT * FROM jobs';
+    const baseSelect = `SELECT jobs.*,
+      (SELECT completed_at FROM runs WHERE runs.job_id = jobs.id AND runs.status = 'success' ORDER BY completed_at DESC LIMIT 1) as last_run_at,
+      datetime(
+        (SELECT completed_at FROM runs WHERE runs.job_id = jobs.id AND runs.status = 'success' ORDER BY completed_at DESC LIMIT 1),
+        '+' || jobs.frequency_hours || ' hours'
+      ) as next_run_at
+    FROM jobs`;
+    let query = baseSelect;
     const params: string[] = [];
 
     if (type) {
-      query += ' WHERE type = ?';
+      query += ' WHERE jobs.type = ?';
       params.push(type);
     }
 
-    query += ' ORDER BY created_at DESC';
+    query += ' ORDER BY jobs.created_at DESC';
 
     const stmt = c.env.DB.prepare(query);
     const result = params.length > 0
@@ -40,7 +47,13 @@ app.get('/:id', async (c) => {
       return c.json({ success: false, error: 'Invalid job ID' }, 400);
     }
 
-    const result = await c.env.DB.prepare('SELECT * FROM jobs WHERE id = ?')
+    const result = await c.env.DB.prepare(`SELECT jobs.*,
+      (SELECT completed_at FROM runs WHERE runs.job_id = jobs.id AND runs.status = 'success' ORDER BY completed_at DESC LIMIT 1) as last_run_at,
+      datetime(
+        (SELECT completed_at FROM runs WHERE runs.job_id = jobs.id AND runs.status = 'success' ORDER BY completed_at DESC LIMIT 1),
+        '+' || jobs.frequency_hours || ' hours'
+      ) as next_run_at
+    FROM jobs WHERE jobs.id = ?`)
       .bind(id)
       .first<Job>();
 
@@ -79,8 +92,8 @@ app.post('/', async (c) => {
     const now = new Date().toISOString();
 
     const result = await c.env.DB.prepare(
-      `INSERT INTO jobs (name, type, url, frequency_hours, enabled, config, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO jobs (name, type, url, frequency_hours, enabled, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
        RETURNING *`
     )
       .bind(
@@ -89,7 +102,6 @@ app.post('/', async (c) => {
         body.url || null,
         body.frequency_hours || 24,
         body.enabled !== false ? 1 : 0,
-        body.config ? JSON.stringify(body.config) : null,
         now,
         now
       )
@@ -151,10 +163,6 @@ app.put('/:id', async (c) => {
     if (body.enabled !== undefined) {
       updates.push('enabled = ?');
       params.push(body.enabled ? 1 : 0);
-    }
-    if (body.config !== undefined) {
-      updates.push('config = ?');
-      params.push(body.config ? JSON.stringify(body.config) : null);
     }
 
     if (updates.length === 0) {

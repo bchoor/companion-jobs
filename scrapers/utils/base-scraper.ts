@@ -10,7 +10,6 @@ export interface ScraperDefinition {
   slug: string;
   url: string;
   frequencyHours: number;
-  config?: Record<string, unknown>;
   enabled?: boolean;
 }
 
@@ -75,24 +74,22 @@ export abstract class BaseScraper {
   private async ensureJob(): Promise<Job> {
     // Insert or update job in D1
     const enabledValue = this.def.enabled !== false ? 1 : 0;
-    const configValue = JSON.stringify(this.def.config ?? {});
 
     await d1Execute(
-      `INSERT INTO jobs (name, type, url, frequency_hours, enabled, config)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO jobs (name, type, url, frequency_hours, enabled)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(name) DO UPDATE SET
          url = excluded.url,
          frequency_hours = excluded.frequency_hours,
          enabled = excluded.enabled,
-         config = excluded.config,
-         updated_at = datetime('now')`,
+         updated_at = ?`,
       [
         this.def.slug,       // name
         'scrape',            // type (default for scrapers)
         this.def.url,        // url
         this.def.frequencyHours, // frequency_hours
         enabledValue,        // enabled (1 or 0)
-        configValue,         // config (JSON string)
+        new Date().toISOString(), // updated_at (UTC ISO 8601)
       ]
     );
 
@@ -111,9 +108,9 @@ export abstract class BaseScraper {
 
   private async recordRunStart(jobId: number): Promise<number> {
     await d1Execute(
-      `INSERT INTO runs (job_id, status, started_at)
-       VALUES (?, 'running', datetime('now'))`,
-      [jobId]
+      `INSERT INTO runs (job_id, status, started_at, trigger)
+       VALUES (?, 'running', ?, 'manual')`,
+      [jobId, new Date().toISOString()]
     );
 
     // Get the last inserted row ID
@@ -134,18 +131,18 @@ export abstract class BaseScraper {
     await d1Execute(
       `UPDATE runs SET
          status = 'success',
-         completed_at = datetime('now'),
+         completed_at = ?,
          screenshot_file = ?,
          products_found = ?
        WHERE id = ?`,
-      [screenshotHash, productsFound, runId]
+      [new Date().toISOString(), screenshotHash, productsFound, runId]
     );
 
     // Insert result data
     await d1Execute(
       `INSERT INTO results (run_id, data, created_at)
-       VALUES (?, ?, datetime('now'))`,
-      [runId, JSON.stringify(data)]
+       VALUES (?, ?, ?)`,
+      [runId, JSON.stringify(data), new Date().toISOString()]
     );
   }
 
@@ -153,10 +150,10 @@ export abstract class BaseScraper {
     await d1Execute(
       `UPDATE runs SET
          status = 'failed',
-         completed_at = datetime('now'),
+         completed_at = ?,
          error_message = ?
        WHERE id = ?`,
-      [error.substring(0, 2000), runId]
+      [new Date().toISOString(), error.substring(0, 2000), runId]
     );
   }
 
@@ -190,6 +187,24 @@ export abstract class BaseScraper {
 
         browser = await chromium.launch();
         const page = await browser.newPage();
+
+        // Capture page console logs (for DEBUG output and other browser-context logging)
+        page.on('console', (msg) => {
+          const args = msg.args();
+          Promise.all(args.map(arg => arg.jsonValue())).then((values) => {
+            const logMessage = values.map(v => 
+              typeof v === 'string' ? v : JSON.stringify(v)
+            ).join(' ');
+            
+            if (msg.type() === 'log') {
+              originalLog(`[page-console] ${logMessage}`);
+            } else if (msg.type() === 'error') {
+              originalError(`[page-console] ${logMessage}`);
+            }
+          }).catch(err => {
+            originalError(`[page-console] [Error reading args]: ${err}`);
+          });
+        });
 
         await this.configurePage(page);
         await page.goto(job.url, { waitUntil: this.navigationWaitUntil() });

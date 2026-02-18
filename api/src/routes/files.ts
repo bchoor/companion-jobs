@@ -12,8 +12,8 @@ app.get('/:hash', async (c) => {
       return c.json({ success: false, error: 'Invalid hash' }, 400);
     }
 
-    // Construct R2 key: {hash.slice(0,2)}/{hash}.webp
-    const key = `${hash.slice(0, 2)}/${hash}.webp`;
+    // Construct R2 key: {hash.slice(0,2)}/{hash}
+    const key = `${hash.slice(0, 2)}/${hash}`;
 
     // Check if object exists in R2
     const object = await c.env.STORE.head(key);
@@ -38,7 +38,7 @@ app.get('/:hash', async (c) => {
     // Return the file with appropriate headers
     return new Response(file.body, {
       headers: {
-        'Content-Type': file.httpMetadata?.contentType || 'image/webp',
+        'Content-Type': file.httpMetadata?.contentType || 'application/octet-stream',
         'Cache-Control': 'public, max-age=3600',
         'Content-Length': file.size.toString(),
       },

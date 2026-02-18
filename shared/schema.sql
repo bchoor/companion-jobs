@@ -5,7 +5,6 @@ CREATE TABLE jobs (
   url TEXT,
   frequency_hours INTEGER NOT NULL,
   enabled INTEGER NOT NULL DEFAULT 1,
-  config TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -20,6 +19,7 @@ CREATE TABLE runs (
   screenshot_file TEXT,
   error_message TEXT,
   products_found INTEGER,
+  trigger TEXT NOT NULL DEFAULT 'scheduled' CHECK(trigger IN ('scheduled', 'manual')),
   FOREIGN KEY (job_id) REFERENCES jobs(id)
 );
 

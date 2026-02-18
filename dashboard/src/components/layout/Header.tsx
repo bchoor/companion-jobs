@@ -1,81 +1,50 @@
-import { useRouterState } from '@tanstack/react-router';
-import { Home, ChevronRight } from 'lucide-react';
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
-import { ThemeToggle } from '@/components/theme-toggle';
+import { useEffect, useState } from 'react'
+import { cn } from '@/lib/utils'
+import { Separator } from '@/components/ui/separator'
+import { SidebarTrigger } from '@/components/ui/sidebar'
 
-export function Header() {
-  const router = useRouterState();
-  const pathname = router.location.pathname;
+type HeaderProps = React.HTMLAttributes<HTMLElement> & {
+  fixed?: boolean
+  ref?: React.Ref<HTMLElement>
+}
 
-  // Generate breadcrumbs from pathname
-  const getBreadcrumbs = () => {
-    if (pathname === '/') {
-      return [{ label: 'Dashboard', href: '/', isLast: true }];
+export function Header({ className, fixed, children, ...props }: HeaderProps) {
+  const [offset, setOffset] = useState(0)
+
+  useEffect(() => {
+    const onScroll = () => {
+      setOffset(document.body.scrollTop || document.documentElement.scrollTop)
     }
 
-    const segments = pathname.split('/').filter(Boolean);
-    const breadcrumbs = [{ label: 'Dashboard', href: '/', isLast: false }];
+    // Add scroll listener to the body
+    document.addEventListener('scroll', onScroll, { passive: true })
 
-    segments.forEach((segment, index) => {
-      const href = '/' + segments.slice(0, index + 1).join('/');
-      const isLast = index === segments.length - 1;
-
-      // Capitalize and format segment
-      let label = segment.charAt(0).toUpperCase() + segment.slice(1);
-
-      // Handle special cases
-      if (segment === 'jobs') label = 'Jobs';
-      if (segment.match(/^\d+$/)) label = `#${segment}`;
-
-      breadcrumbs.push({ label, href, isLast });
-    });
-
-    return breadcrumbs;
-  };
-
-  const breadcrumbs = getBreadcrumbs();
+    // Clean up the event listener on unmount
+    return () => document.removeEventListener('scroll', onScroll)
+  }, [])
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-14 items-center px-4 lg:px-6">
-        <div className="flex flex-1 items-center">
-          <Breadcrumb>
-            <BreadcrumbList>
-              {breadcrumbs.map((crumb, index) => (
-                <div key={crumb.href} className="flex items-center">
-                  {index > 0 && (
-                    <BreadcrumbSeparator>
-                      <ChevronRight className="h-4 w-4" />
-                    </BreadcrumbSeparator>
-                  )}
-                  <BreadcrumbItem>
-                    {crumb.isLast ? (
-                      <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                    ) : (
-                      <BreadcrumbLink href={crumb.href}>
-                        {index === 0 && <Home className="h-4 w-4" />}
-                        {index > 0 && crumb.label}
-                      </BreadcrumbLink>
-                    )}
-                  </BreadcrumbItem>
-                </div>
-              ))}
-            </BreadcrumbList>
-          </Breadcrumb>
-        </div>
-
-        <div className="flex items-center gap-4">
-          <ThemeToggle />
-          <div className="hidden sm:block text-sm font-medium">Companion Jobs</div>
-        </div>
+    <header
+      className={cn(
+        'z-50 h-16',
+        fixed && 'header-fixed peer/header sticky top-0 w-[inherit]',
+        offset > 10 && fixed ? 'shadow' : 'shadow-none',
+        className
+      )}
+      {...props}
+    >
+      <div
+        className={cn(
+          'relative flex h-full items-center gap-3 p-4 sm:gap-4',
+          offset > 10 &&
+            fixed &&
+            'after:absolute after:inset-0 after:-z-10 after:bg-background/20 after:backdrop-blur-lg'
+        )}
+      >
+        <SidebarTrigger variant='outline' className='max-md:scale-125' />
+        <Separator orientation='vertical' className='h-6' />
+        {children}
       </div>
     </header>
-  );
+  )
 }

@@ -5,9 +5,10 @@ export interface Job {
   url: string | null;
   frequency_hours: number;
   enabled: boolean;
-  config: Record<string, any> | null;
   created_at: string;
   updated_at: string;
+  last_run_at?: string | null;
+  next_run_at?: string | null;
 }
 
 export interface Run {
@@ -20,6 +21,7 @@ export interface Run {
   screenshot_file: string | null;
   error_message: string | null;
   products_found: number | null;
+  trigger: 'scheduled' | 'manual';
 }
 
 export interface Result {

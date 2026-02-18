@@ -19,13 +19,6 @@ class FestoolReconScraper extends BaseScraper {
       slug: "festoolrecon",
       url: "https://festoolrecon.com",
       frequencyHours: 4,
-      config: {
-        selectors: {
-          product: '[data-section-type="product"]',
-          name: '[data-section-type="product"] h1',
-          price: ".product-single__price-product-template",
-        },
-      },
     });
   }
 
