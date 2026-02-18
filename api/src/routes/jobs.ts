@@ -4,6 +4,10 @@ import type { Job } from '../../../shared/types';
 
 const app = new Hono<{ Bindings: Env }>();
 
+function parseJobConfig(job: any): any {
+  return { ...job, config: typeof job.config === 'string' ? JSON.parse(job.config) : (job.config ?? null) };
+}
+
 // GET /api/jobs - List all jobs (with optional ?type= filter)
 app.get('/', async (c) => {
   try {
@@ -31,7 +35,7 @@ app.get('/', async (c) => {
       ? await stmt.bind(...params).all<Job>()
       : await stmt.all<Job>();
 
-    return c.json({ success: true, data: result.results || [] });
+    return c.json({ success: true, data: (result.results || []).map(parseJobConfig) });
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return c.json({ success: false, error: 'Failed to fetch jobs' }, 500);
@@ -61,7 +65,7 @@ app.get('/:id', async (c) => {
       return c.json({ success: false, error: 'Job not found' }, 404);
     }
 
-    return c.json({ success: true, data: result });
+    return c.json({ success: true, data: parseJobConfig(result) });
   } catch (error) {
     console.error('Error fetching job:', error);
     return c.json({ success: false, error: 'Failed to fetch job' }, 500);
@@ -92,8 +96,8 @@ app.post('/', async (c) => {
     const now = new Date().toISOString();
 
     const result = await c.env.DB.prepare(
-      `INSERT INTO jobs (name, type, url, frequency_hours, enabled, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO jobs (name, type, url, frequency_hours, enabled, config, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        RETURNING *`
     )
       .bind(
@@ -102,12 +106,13 @@ app.post('/', async (c) => {
         body.url || null,
         body.frequency_hours || 24,
         body.enabled !== false ? 1 : 0,
+        body.config ? JSON.stringify(body.config) : null,
         now,
         now
       )
       .first<Job>();
 
-    return c.json({ success: true, data: result }, 201);
+    return c.json({ success: true, data: parseJobConfig(result) }, 201);
   } catch (error) {
     console.error('Error creating job:', error);
     return c.json({ success: false, error: 'Failed to create job' }, 500);
@@ -164,6 +169,10 @@ app.put('/:id', async (c) => {
       updates.push('enabled = ?');
       params.push(body.enabled ? 1 : 0);
     }
+    if (body.config !== undefined) {
+      updates.push('config = ?');
+      params.push(body.config !== null ? JSON.stringify(body.config) : null);
+    }
 
     if (updates.length === 0) {
       return c.json({ success: false, error: 'No fields to update' }, 400);
@@ -179,7 +188,7 @@ app.put('/:id', async (c) => {
       .bind(...params)
       .first<Job>();
 
-    return c.json({ success: true, data: result });
+    return c.json({ success: true, data: parseJobConfig(result) });
   } catch (error) {
     console.error('Error updating job:', error);
     return c.json({ success: false, error: 'Failed to update job' }, 500);

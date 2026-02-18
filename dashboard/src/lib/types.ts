@@ -1,3 +1,7 @@
+export interface JobConfig {
+  alerting_enabled?: boolean;
+}
+
 export interface Job {
   id: number;
   name: string;
@@ -5,6 +9,7 @@ export interface Job {
   url: string | null;
   frequency_hours: number;
   enabled: boolean;
+  config: JobConfig | null;
   created_at: string;
   updated_at: string;
   last_run_at?: string | null;

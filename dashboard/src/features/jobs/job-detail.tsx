@@ -8,7 +8,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,6 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import { Label } from '@/components/ui/label'
 import { ConfigDrawer } from '@/components/config-drawer'
 import { Header } from '@/components/layout/header'
 import { Main } from '@/components/layout/main'
@@ -71,6 +72,37 @@ export function JobDetail({ jobId }: JobDetailProps) {
     },
   })
 
+  const enabledMutation = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      const { data } = await api.put(`/api/jobs/${jobId}`, { enabled })
+      return data
+    },
+    onSuccess: () => {
+      toast.success('Job updated')
+      queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
+      queryClient.invalidateQueries({ queryKey: ['jobs'] })
+    },
+    onError: (error) => {
+      toast.error(`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    },
+  })
+
+  const alertingMutation = useMutation({
+    mutationFn: async (alerting_enabled: boolean) => {
+      const { data } = await api.put(`/api/jobs/${jobId}`, {
+        config: { ...job?.config, alerting_enabled },
+      })
+      return data
+    },
+    onSuccess: () => {
+      toast.success('Alerting updated')
+      queryClient.invalidateQueries({ queryKey: ['jobs', jobId] })
+    },
+    onError: (error) => {
+      toast.error(`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    },
+  })
+
   return (
     <>
       <Header>
@@ -92,9 +124,14 @@ export function JobDetail({ jobId }: JobDetailProps) {
           <div className='space-y-6'>
             <div className='flex items-center gap-3'>
               <h1 className='text-2xl font-bold tracking-tight'>{job.name}</h1>
-              <Badge variant={job.enabled ? 'default' : 'secondary'}>
-                {job.enabled ? 'Enabled' : 'Disabled'}
-              </Badge>
+              <div className='flex items-center gap-2'>
+                <Switch
+                  checked={!!job.enabled}
+                  onCheckedChange={(checked) => enabledMutation.mutate(checked)}
+                  disabled={enabledMutation.isPending}
+                />
+                <Label className='text-sm'>{job.enabled ? 'Enabled' : 'Disabled'}</Label>
+              </div>
               <Button
                 size='sm'
                 variant='outline'
@@ -123,9 +160,18 @@ export function JobDetail({ jobId }: JobDetailProps) {
                   </div>
                   <div className='flex justify-between'>
                     <span className='font-medium'>URL:</span>
-                    <span className='text-muted-foreground truncate max-w-xs'>
-                      {job.url || 'N/A'}
-                    </span>
+                    {job.url ? (
+                      <a
+                        href={job.url}
+                        target='_blank'
+                        rel='noopener noreferrer'
+                        className='text-muted-foreground truncate max-w-xs hover:underline'
+                      >
+                        {job.url}
+                      </a>
+                    ) : (
+                      <span className='text-muted-foreground'>N/A</span>
+                    )}
                   </div>
                   <div className='flex items-center justify-between'>
                     <span className='font-medium'>Frequency:</span>
@@ -177,6 +223,17 @@ export function JobDetail({ jobId }: JobDetailProps) {
                         {formatDistanceToNow(parseUTCDate(job.next_run_at), { addSuffix: true })}
                       </span>
                     )}
+                  </div>
+                  <div className='flex items-center justify-between'>
+                    <span className='font-medium'>Alerting:</span>
+                    <div className='flex items-center gap-2'>
+                      <Switch
+                        checked={!!job.config?.alerting_enabled}
+                        onCheckedChange={(checked) => alertingMutation.mutate(checked)}
+                        disabled={alertingMutation.isPending}
+                      />
+                      <Label className='text-sm'>{job.config?.alerting_enabled ? 'On' : 'Off'}</Label>
+                    </div>
                   </div>
                 </div>
               </CardContent>

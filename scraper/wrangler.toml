@@ -8,6 +8,8 @@ crons = ["0 * * * *"]
 
 [vars]
 CF_ACCOUNT_ID = "87a4f50952b4b2ce00cab6c2680e63ae"
+EMAIL_FROM = "alerts@homeyfy.com"
+EMAIL_TO = "bchoor@gmail.com"
 
 [[d1_databases]]
 binding = "DB"

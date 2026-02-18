@@ -1,10 +1,14 @@
 import { extractFestoolrecon } from './extract-festoolrecon';
+import { sendChangeNotification } from './email';
 
 interface Env {
   DB: D1Database;
   STORE: R2Bucket;
   CF_ACCOUNT_ID: string;
   CF_API_TOKEN: string;
+  RESEND_API_KEY: string;
+  EMAIL_FROM: string;
+  EMAIL_TO: string;
 }
 
 const CORS_HEADERS = {
@@ -50,8 +54,8 @@ async function runScrape(env: Env, trigger: 'scheduled' | 'manual'): Promise<str
     ).run();
 
     const jobResult = await env.DB.prepare(
-      `SELECT id FROM jobs WHERE name = 'festoolrecon'`
-    ).first<{ id: number }>();
+      `SELECT id, config FROM jobs WHERE name = 'festoolrecon'`
+    ).first<{ id: number; config: string | null }>();
 
     if (!jobResult) {
       throw new Error('Failed to ensure job');
@@ -59,6 +63,8 @@ async function runScrape(env: Env, trigger: 'scheduled' | 'manual'): Promise<str
 
     const jobId = jobResult.id;
     console.log(`[festoolrecon] Job ensured: id=${jobId}`);
+    const jobConfig = jobResult.config ? JSON.parse(jobResult.config) : {};
+    const alertingEnabled = jobConfig.alerting_enabled === true;
 
     // 2. Create Run
     const runResult = await env.DB.prepare(
@@ -107,6 +113,64 @@ async function runScrape(env: Env, trigger: 'scheduled' | 'manual'): Promise<str
     // 4. Extract Data
     const result = extractFestoolrecon(snapshot.result.content);
     console.log(`[festoolrecon] Extracted ${result.productsFound} products`);
+
+    // 4a. Check for Product Changes and Send Notification
+    try {
+      const previousRun = await env.DB.prepare(
+        `SELECT results.data FROM results
+         JOIN runs ON results.run_id = runs.id
+         WHERE runs.job_id = ? AND runs.status = 'success'
+         ORDER BY runs.started_at DESC LIMIT 1`
+      ).bind(jobId).first<{ data: string }>();
+
+      let previousProductName: string | null = null;
+      let previousPricing: { msrp?: string; discounted?: string } | null = null;
+      if (previousRun?.data) {
+        try {
+          const previousData = JSON.parse(previousRun.data);
+          previousProductName = previousData?.products?.[0]?.productName || null;
+          previousPricing = previousData?.products?.[0]
+            ? { msrp: previousData.products[0].msrp, discounted: previousData.products[0].discountedPrice }
+            : null;
+        } catch {
+          // Invalid JSON, treat as no previous data
+        }
+      }
+
+      const currentProductName = result.data?.products?.[0]?.productName;
+      const isFirstRun = !previousProductName;
+      const hasChanged = previousProductName && currentProductName !== previousProductName;
+
+      if (currentProductName && (isFirstRun || hasChanged)) {
+        console.log(
+          `[festoolrecon] Product change detected: "${previousProductName || 'none'}" → "${currentProductName}"`
+        );
+        if (alertingEnabled) {
+          const emailResult = await sendChangeNotification({
+            oldProductName: previousProductName || null,
+            newProductName: currentProductName,
+            oldPricing: previousPricing,
+            pricing: {
+              msrp: result.data?.products?.[0]?.msrp ?? undefined,
+              discounted: result.data?.products?.[0]?.discountedPrice ?? undefined,
+            },
+            screenshotBase64: snapshot.result.screenshot,
+            resendApiKey: env.RESEND_API_KEY,
+            emailFrom: env.EMAIL_FROM,
+            emailTo: env.EMAIL_TO,
+          });
+          console.log(
+            `[festoolrecon] Email notification: ${emailResult.success ? 'sent' : `failed: ${emailResult.error}`}`
+          );
+        } else {
+          console.log(`[festoolrecon] Product change detected but alerting is disabled`);
+        }
+      } else {
+        console.log(`[festoolrecon] No product change detected: "${currentProductName}"`);
+      }
+    } catch (error) {
+      console.error('[festoolrecon] Change detection failed (non-fatal):', error);
+    }
 
     // 5. Store Screenshot in R2
     const screenshotBuffer = Uint8Array.from(
