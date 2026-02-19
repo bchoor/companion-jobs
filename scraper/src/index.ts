@@ -35,7 +35,8 @@ async function runScrape(env: Env, trigger: 'scheduled' | 'manual'): Promise<str
         const lastRunTime = new Date(lastRun.completed_at + 'Z').getTime();
         const now = Date.now();
         const hoursSinceLastRun = (now - lastRunTime) / (1000 * 60 * 60);
-        if (hoursSinceLastRun < job.frequency_hours) {
+        const tolerance = 5 / 60; // 5 minutes in hours
+        if (hoursSinceLastRun < job.frequency_hours - tolerance) {
           console.log(`[festoolrecon] Skipping: ${hoursSinceLastRun.toFixed(1)}h since last run, frequency is ${job.frequency_hours}h`);
           return `Skipped: only ${hoursSinceLastRun.toFixed(1)}h since last run (frequency: ${job.frequency_hours}h)`;
         }
@@ -323,6 +324,82 @@ export default {
       } catch (error) {
         console.error('[test-email] Failed:', error);
         return new Response(`Test email failed: ${error}`, { status: 500, headers: CORS_HEADERS });
+      }
+    }
+
+    if (url.pathname === '/status') {
+      try {
+        // 1. Query job config
+        const job = await env.DB.prepare(
+          `SELECT id, frequency_hours, config FROM jobs WHERE name = 'festoolrecon'`
+        ).first<{ id: number; frequency_hours: number; config: string | null }>();
+
+        if (!job) {
+          return new Response(
+            JSON.stringify({ error: 'Job not found' }),
+            { status: 404, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const jobConfig = job.config ? JSON.parse(job.config) : {};
+        const alertingEnabled = jobConfig.alerting_enabled === true;
+
+        // 2. Query last successful run per trigger type
+        const lastRuns = await env.DB.prepare(
+          `SELECT trigger, MAX(completed_at) as last_run
+           FROM runs
+           WHERE job_id = ? AND status = 'success'
+           GROUP BY trigger`
+        ).bind(job.id).all<{ trigger: 'scheduled' | 'manual'; last_run: string }>();
+
+        const lastRunsByTrigger: { scheduled: string | null; manual: string | null } = {
+          scheduled: null,
+          manual: null,
+        };
+
+        for (const row of lastRuns.results || []) {
+          lastRunsByTrigger[row.trigger] = row.last_run;
+        }
+
+        // 3. Calculate hoursSinceLastSuccess and nextScheduledWouldRun
+        const mostRecentTimestamp = [lastRunsByTrigger.scheduled, lastRunsByTrigger.manual]
+          .filter(Boolean)
+          .map(ts => new Date(ts! + 'Z').getTime())
+          .sort((a, b) => b - a)[0];
+
+        let hoursSinceLastSuccess: number | null = null;
+        let nextScheduledWouldRun = false;
+
+        if (mostRecentTimestamp) {
+          const now = Date.now();
+          hoursSinceLastSuccess = (now - mostRecentTimestamp) / (1000 * 60 * 60);
+          nextScheduledWouldRun = hoursSinceLastSuccess >= job.frequency_hours;
+        } else {
+          // No successful runs yet
+          nextScheduledWouldRun = true;
+        }
+
+        const status = {
+          job: {
+            frequency_hours: job.frequency_hours,
+            alerting_enabled: alertingEnabled,
+          },
+          lastRuns: lastRunsByTrigger,
+          hoursSinceLastSuccess,
+          nextScheduledWouldRun,
+          checkedAt: new Date().toISOString(),
+        };
+
+        return new Response(JSON.stringify(status), {
+          status: 200,
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        });
+      } catch (error) {
+        console.error('[status] Failed:', error);
+        return new Response(
+          JSON.stringify({ error: `Status check failed: ${error}` }),
+          { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        );
       }
     }
 
